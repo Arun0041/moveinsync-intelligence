@@ -20,7 +20,15 @@ A large share of reviews are short 5-star notes with no clear issue, which is wh
 
 ## How to run
 
-```powershell
+```bash
+git clone https://github.com/Arun0041/moveinsync-intelligence.git
+cd moveinsync-intelligence
+python -m venv .venv
+```
+
+Activate it (Windows: `.\.venv\Scripts\Activate.ps1`, macOS/Linux: `source .venv/bin/activate`), then:
+
+```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
