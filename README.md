@@ -1,72 +1,43 @@
 # MoveInSync Review Intelligence
 
-Live Play-Store review triage for the MoveInSync ETS employee transport app (`com.moveinsync.ets`). The dashboard fetches real reviews on launch, labels low-rated feedback with transparent rules, ranks fix priorities, and exports submission-ready results.
+I built this for the FDE case study on the MoveInSync ETS app (com.moveinsync.ets). It pulls real Play Store reviews, groups the low-rated ones into issue categories, and ranks what to fix first.
 
-## How data loading works
+## Data
 
-1. **Live fetch (default):** on launch the app pulls the newest text reviews from Google Play via `google-play-scraper` and caches them to `data/collected_reviews.csv`. Sidebar toggle: Auto-fetch live Play data. Button: Refresh live now.
-2. **Upload override:** any CSV uploaded in the sidebar takes precedence over live data.
-3. **Cached fallback:** if live fetch fails (offline, blocked network), the app loads `data/collected_reviews.csv` and shows a CACHED badge with file freshness.
-4. **No-data guard:** if live fetch fails and no cache exists, the app stops with an upload prompt instead of showing demo data.
+I collected 600 written reviews from the Google Play listing (Oct 2026, mostly version 12.19.0) into `data/collected_reviews.csv`, keeping review id, rating, date, text, app version and source URL for traceability. The app also fetches fresh reviews automatically on launch and falls back to this file when offline. One thing worth knowing: the Play header shows ~4.6 because it counts every star-only rating ever given, while my 600 written reviews average 3.77 since unhappy users are the ones who write. Both numbers are shown in the dashboard.
 
-## Store rating vs dashboard average
+## What I found
 
-The Play listing shows ~4.6 across 114,880+ lifetime ratings, including star-only ratings with no text. The dashboard dataset (e.g. 600 newest written reviews from `data/collected_reviews.csv`) averages lower (~3.7) because unhappy users write more and the scraper cannot return silent star-only ratings. The dashboard shows both numbers side by side: Store rating KPI plus Sample avg KPI, with the sidebar Store baseline inputs (defaults 4.6 / 114880) auto-overridden when the live listing lookup succeeds. Report both numbers in your submission.
+Out of 600 reviews, 29% are 1-2 stars. After classifying them, the top actionable groups were:
 
-## Quick start (Windows PowerShell)
+- Booking / scheduling (31 reviews) - roster and return-trip booking failures, date mismatches
+- Driver / transport operations (32) - late pickups, missed cabs, route issues
+- GPS / tracking / ETA (26) - stale driver location, wrong ETAs
+- Login / crash / performance (25) - app not opening, post-update crashes
+- Notifications / reminders (19) - OTP and reminder problems
+
+A large share of reviews are short 5-star notes with no clear issue, which is why Other is the biggest bucket. Those were left out of the priority ranking.
+
+## How to run
 
 ```powershell
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Open the printed local URL (usually `http://localhost:8501`).
+Tests: `python -m pytest -q`
 
-## Manual collection (optional)
+To collect fresh reviews: `python scripts/collect_play_reviews.py --app-id com.moveinsync.ets --count 500 --out data/collected_reviews.csv`
 
-```powershell
-python scripts/collect_play_reviews.py --app-id com.moveinsync.ets --count 500 --out data/collected_reviews.csv
-```
+## How it is built
 
-Then upload `data/collected_reviews.csv` in the sidebar or turn auto-fetch off. See `docs/DATA_COLLECTION.md` for responsible-collection notes.
-
-## Review CSV format
-
-Required: `rating` (1-5), `date` (ISO recommended), `text`.
-Optional: `review_id`, `app_version`, `source`, `source_url`.
-
-## Run tests
-
-```powershell
-python -m pytest -q
-```
-
-## How it works
-
-Classifier (`src/classify_reviews.py`) uses ordered keyword rules: Booking > GPS > Notifications > Login/crash > Check-in > Driver/ops > Support > Other. Primary category is first match; all matches kept in `all_matched_categories`. Priority default is `0.40 x frequency + 0.35 x severity + 0.25 x confidence`, editable in the sidebar. Severity is a proposed rubric, not company priority. Safety issues escalate separately.
-
-## Structure
-
-```text
-app.py
-src/clean_reviews.py, classify_reviews.py, analytics.py, prioritization.py, report_export.py, validation.py, auto_fetch.py
-scripts/collect_play_reviews.py, generate_demo_data.py
-data/collected_reviews.csv (real Play cache)
-.streamlit/config.toml
-docs/, tests/, assets/
-```
-
-## Deploy (Streamlit Cloud)
-
-1. Push to GitHub (do NOT upload `.venv`, `__pycache__`, `.pytest_cache`).
-2. On share.streamlit.io create a New app, select the repo, main file `app.py`.
-3. Deploy. Live fetch runs on launch; the bundled `data/collected_reviews.csv` covers offline starts.
+- `app.py` - Streamlit dashboard (overview, issues, versions, explorer, export)
+- `src/clean_reviews.py` - dedupe and validation
+- `src/classify_reviews.py` - keyword rules, first match wins, all matches kept
+- `src/prioritization.py` - priority = 0.40 frequency + 0.35 severity + 0.25 confidence
+- `src/auto_fetch.py` - Play Store fetching and caching
+- `scripts/collect_play_reviews.py` - one-off collection script
 
 ## Limitations
 
-- No internal telemetry included; reviews alone do not prove root cause.
-- Rule labels are triage hypotheses; validate by reading examples in Explorer.
-- Public reviews are self-selected and may be outdated or duplicated.
+Rule-based labels are only a first pass and will misfire on some reviews. I validated by reading examples per category in the explorer, but a manual labelled sample would make the precision numbers solid. Reviews alone also cannot prove root cause - crash logs and trip data would be needed to confirm.
