@@ -109,15 +109,16 @@ def resolve_data():
                 save_rows(rows)
             except Exception:
                 pass
-            return pd.DataFrame(rows), "live", f"Live | {len(rows)} reviews"
+            return pd.DataFrame(rows), "live", f"{len(rows)} fresh reviews"
         st.warning(f"Live fetch failed ({err}). Using cached file.")
     if COLLECTED.exists():
         try:
             df = pd.read_csv(COLLECTED)
-            return df, "cache", f"Cached | {freshness_label()} | {len(df)} rows"
+            return df, "cache", f"{freshness_label()} | {len(df)} rows"
         except Exception as exc:
             st.error(f"Cached file unreadable: {exc}")
-    return pd.read_csv(ROOT / "data" / "sample_reviews.csv"), "demo", "Demo data"
+    st.error("No review data available. Turn on auto-fetch or upload a review CSV.")
+    st.stop()
 
 raw, mode, mode_note = resolve_data()
 
@@ -133,10 +134,10 @@ if cleaned.empty:
 classified = classify_reviews(cleaned)
 weights = {"frequency": fw, "severity": sw, "confidence": cw}
 priorities = prioritize_categories(classified, weights=weights)
-dataset_label = {"live": "live Google Play", "cache": "data/collected_reviews.csv", "upload": "uploaded CSV", "demo": "data/sample_reviews.csv"}[mode]
+dataset_label = {"live": "live Google Play", "cache": "data/collected_reviews.csv", "upload": "uploaded CSV"}[mode]
 
-badge_cls = {"live": "badge-live", "cache": "badge-cache", "demo": "badge-demo", "upload": "badge-cache"}[mode]
-badge_txt = {"live": "LIVE PLAY STORE", "cache": "CACHED FILE", "demo": "DEMO DATA", "upload": "UPLOADED FILE"}[mode]
+badge_cls = {"live": "badge-live", "cache": "badge-cache", "upload": "badge-cache"}[mode]
+badge_txt = {"live": "LIVE PLAY STORE", "cache": "CACHED FILE", "upload": "UPLOADED FILE"}[mode]
 
 st.markdown(f"""
 <div class="hero">
@@ -174,8 +175,6 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-if mode == "demo":
-    st.warning("Demo data shown. Enable auto-fetch or upload real reviews.")
 with st.expander("Why sample average differs from the store rating"):
     st.markdown("Store rating covers all lifetime ratings, including star-only ratings with no text. The dashboard sample covers only written reviews, which skew negative. Report both numbers.")
 
